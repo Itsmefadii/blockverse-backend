@@ -8,5 +8,13 @@ export const allRoutes = (fastify, options, done) => {
   fastify.register(dashboardRoutes, { prefix: '/dashboard' });
   fastify.register(transactonRoutes, { prefix: '/transfer' });
   fastify.register(systemConfigRoutes, { prefix: '/system-configs' });
+  fastify.get("/health", async () => {
+    return {
+      status: "ok",
+      success: true,
+      service: "api",
+      timestamp: new Date().toISOString(),
+    };
+  });
   done();
 };

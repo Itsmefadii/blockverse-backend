@@ -4,6 +4,7 @@ import { verifyAccessToken } from "../utils/utils.js";
 const insecureRoutes = [
   "/api/v1/auth/login",
   "/api/v1/auth/signup",
+  "/api/v1/health"
 ];
 
 export function preValidate(fastify){
