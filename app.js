@@ -9,8 +9,8 @@ import { preValidate } from "./middleware/preValidate.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const rawEnv = process.env.NODE_ENV?.trim() || "development";
-dotenv.config({ path: path.join(__dirname, `.env.${rawEnv}`) });
+const env = process.env.NODE_ENV?.trim() || "development";
+dotenv.config({ path: path.join(__dirname, `.env.${env}`) });
 
 export function buildApp() {
   const fastify = Fastify({ logger: true });
