@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import fs from "fs";
+import mysql from "mysql2";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +27,7 @@ const sequelize = new Sequelize(
     host: process.env.DBHOST,
     port: process.env.DBPORT,
     dialect: "mysql",
+    dialectModule: mysql,
     logging: true,
     pool: { max: 40, min: 0, acquire: 60000, idle: 10000 },
   }
