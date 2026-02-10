@@ -25,7 +25,7 @@ const sequelize = new Sequelize(
   {
     host: process.env.DBHOST,
     port: process.env.DBPORT,
-    dialect: process.env.DIALECT || "mysql",
+    dialect: "mysql",
     logging: true,
     pool: { max: 40, min: 0, acquire: 60000, idle: 10000 },
   }
