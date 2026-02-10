@@ -24,6 +24,18 @@ export const transferTokenService = async (req) => {
       throw new Error("Enter Valid Amount");
     }
 
+
+  
+    if(req.query.tokenId === "eth"){
+      const ethToOtherWallet1 = await ethToOtherWallet(req)
+      if(!ethToOtherWallet1){
+        throw new Error("Transfer From ETH to Other Wallet Failed");
+      }
+      return{data : ethToOtherWallet1}
+    }
+
+
+
     const privateKey = await User.findOne({
       where: { id: req.user.id },
       attributes: ["privateKey"],
@@ -198,6 +210,23 @@ export const transactionApprovalService = async (req) => {
       toTokenType.tokenType === "USDC"
     ) {
       usdbToUsdc = await USDB_TO_USDC(user, amount);
+    }
+
+    if(fromTokenType.tokenType === "LOCAL" &&
+      toTokenType.tokenType === "LOCAL"
+    ){
+      console.log("Conversion from LOCAL to LOCAL initiated");
+
+      localToUsdb = await Local_TO_USDB(user, amount, from);
+      if(!localToUsdb){
+        throw new Error("Conversion From Local To USDB Failed");
+      }
+
+      usdbToLocal = await USDB_TO_LOCAL(user, amount, to);
+      if(!usdbToLocal){
+        throw new Error("Conversion From USDB to Local Failed");
+      }
+      return{data : usdbToLocal}
     }
 
     if (usdcToUsdb) {
@@ -390,3 +419,33 @@ const _signature = async (privateKey, data) => {
 
   return signature;
 };
+
+
+const ethToOtherWallet = async (req) => {
+console.log("req.user" , req.user)
+  const privateKey = await User.findOne({
+    where : { id : req.user.id },
+    attributes : ["privateKey"],
+  });
+
+  let provider = ethProvider;
+    let adminWallet = new ethers.Wallet(
+      privateKey.privateKey,
+      provider,
+    );
+
+    const {amount, toAddress} = req.body;
+
+    const tx = await adminWallet.sendTransaction({
+      to: toAddress,
+      value: ethers.parseEther(amount),
+    });
+
+    if (!tx) throw new Error("Transaction Not Initiated");
+    console.log("Transaction Initiated:", tx.hash);
+    const txWait = await tx.wait();
+    if (!txWait) throw new Error("Transaction Failed");
+    console.log("Transaction Successful:", txWait.hash);
+
+    return txWait;
+}

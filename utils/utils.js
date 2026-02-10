@@ -21,7 +21,7 @@ export const apiResponse = (
 };
 
 export const signJWT = async (data) => {
-  return jwt.sign(data.toJSON(), process.env.JWT_SECRET, { expiresIn: "1d" });
+  return jwt.sign(data, process.env.JWT_SECRET, { expiresIn: "1d" });
 };
 
 export const verifyAccessToken = async (token) => {
@@ -39,7 +39,9 @@ export const verifyAccessToken = async (token) => {
 };
 
 export const ethProvider = new ethers.JsonRpcProvider(process.env.RPC_URL);
-export const bnbProvider = new ethers.JsonRpcProvider(process.env.BINANCE_RPC_URL);
+export const bnbProvider = new ethers.JsonRpcProvider(
+  process.env.BINANCE_RPC_URL,
+);
 
 export const getTokenBalance = async (walletAddress) => {
   try {
@@ -52,6 +54,17 @@ export const getTokenBalance = async (walletAddress) => {
 
     const balances = [];
     let totalBalance = 0;
+
+    const provider = ethProvider;
+    const balanceWei = await provider.getBalance(walletAddress);
+    const balanceEth = ethers.formatEther(balanceWei);
+
+    const eth = {
+      tokenName: "ETH",
+      balance: Number(balanceEth).toFixed(4),
+    };
+
+    balances.push(eth);
 
     for (let i = 0; i < token.length; i++) {
       const _provider = ethProvider;
@@ -127,4 +140,4 @@ export const _signature = async (privateKey, data) => {
   console.log("Signature:", signature);
 
   return signature;
-}
+};

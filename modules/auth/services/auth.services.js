@@ -37,6 +37,27 @@ export const signupServices = async (req) => {
 
     const data = await User.create(userData, { transaction });
 
+    
+    const role = await Roles.findOne({
+      where: {
+        id: data.roleId,
+      },
+      attributes: ["roleName"],
+    });
+
+    const user = {
+      id: data.id,
+      name,
+      email,
+      walletAddress: wallet.address,
+      roleId: 2,
+      role: role.roleName,
+    };
+
+    console.log("User: ", user);
+
+    const token = await signJWT(user);
+
     let provider = ethProvider;
     let adminWallet = new ethers.Wallet(
       process.env.ADMIN_PRIVATE_KEY,
@@ -54,7 +75,12 @@ export const signupServices = async (req) => {
     if (!txWait) throw new Error("Transaction Failed");
     console.log("Transaction Successful:", txWait.hash);
 
+
+
+    
+
     provider = bnbProvider;
+    provider = ethProvider;
     adminWallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
 
     const bnbTx = await adminWallet.sendTransaction({
@@ -69,7 +95,17 @@ export const signupServices = async (req) => {
     console.log("Transaction Successful:", bnbTx.hash);
 
     await transaction.commit();
-    return data;
+
+    const responseData = {
+      id: data.id,
+      name,
+      email,
+      walletAddress: wallet.address,
+      roleId: 2,
+      role: role.roleName,
+      token
+    }   
+    return responseData;
   } catch (error) {
     await transaction.rollback();
     throw new Error(error.message);
@@ -114,13 +150,17 @@ export const loginServices = async (req) => {
 
     console.log("ROLE: ", role.roleName)
     console.log("Is Admin: ", isAdmin)
+    console.log("ROLE: ", role.roleName);
+    console.log("Is Admin: ", isAdmin);
     if (!isAdmin && role.roleName === "admin") {
       throw new Error("Unauthorized User");
     }
     if (isAdmin && role.roleName === "user") {
       throw new Error("Unauthorized user");
     }
-    const token = await signJWT(user);
+
+    console.log("User: ", user.dataValues);
+    const token = await signJWT(user.dataValues);
 
     const data = {
       id: user.id,

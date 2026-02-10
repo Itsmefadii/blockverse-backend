@@ -1,253 +1,266 @@
-import { ethers } from "ethers";
 import { ethProvider } from "../../../utils/utils.js";
 import { User } from "../../auth/models/user.model.js";
+import { TokenRegistry } from "../../systemConfig/models/TokenRegistry.model.js";
+import { ethers } from "ethers";
 
-export const swappingService = async (req) => {
+export const SwappingService = async (req) => {
   try {
     const { amount, from, to } = req.body;
-
-    const privateKey = await User.findOne({
-      where: { id: req.user.id },
-      attributes: ["privateKey"],
-    });
-
-    const wallet = new ethers.Wallet(privateKey.privateKey, ethProvider);
-
-    const routerAddress = process.env.UNI_SWAP_ROUTER_ADDRESS;
-    const WETH_Address = process.env.WETH_Address;
-    const USDC_Address = process.env.USDC_Address;
-
-    const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
 
     const ROUTER_ABI = [
       "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
       "function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
-    ];
-    const ERC20_ABI = [
-      "function approve(address spender, uint256 amount) public returns (bool)",
-      "function decimals() view returns (uint8)",
-      "function balanceOf(address owner) view returns (uint256)",
+      "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
     ];
 
-    const router = new ethers.Contract(routerAddress, ROUTER_ABI, wallet);
+    console.log("Router ABI:", ROUTER_ABI);
 
-    let swapping;
+    const user = await User.findOne({
+      where: { id: req.user.id },
+      attributes: ["privateKey"],
+    });
 
-    if (from === "USDC" && to === "ETH") {
-      swapping = await USDC_TO_ETH(
-        amount,
-        routerAddress,
-        wallet,
-        router,
-        ERC20_ABI,
-        WETH_Address,
-        USDC_Address,
-        deadline,
-      );
-    }
-    if (from === "ETH" && to === "USDC") {
-      const ethBalance = await ethProvider.getBalance(wallet.address);
+    console.log("User Private Key:", user.privateKey);
+    const wallet = new ethers.Wallet(user.privateKey, ethProvider);
 
-      const ethBalanceReadable = ethers.formatEther(ethBalance);
+    console.log("Wallet Address:", wallet.address);
 
-      console.log("ETH Balance:", ethBalanceReadable);
+    const router = new ethers.Contract(
+      process.env.UNI_SWAP_ROUTER_ADDRESS,
+      ROUTER_ABI,
+      wallet,
+    );
 
-      if (amount > ethBalanceReadable) {
-        throw new Error("Not enough eth in your wallet");
-      }
-      swapping = await ETH_TO_USDC(
-        amount,
-        routerAddress,
-        wallet,
-        router,
-        ERC20_ABI,
-        WETH_Address,
-        USDC_Address,
-        deadline,
-      );
-    }
-    return swapping.hash;
+    console.log("Router Contract:", router);
+
+    const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+
+    console.log("Dealine:", deadline);
+
+    const tx = await swap({
+      amount,
+      fromSymbol: from,
+      toSymbol: to,
+      wallet,
+      router,
+      deadline,
+    });
+
+    console.log("Swap Transaction:", tx)
+
+    const receipt = await tx.wait();
+
+    console.log("Transaction Receipt:", receipt);
+    return receipt.hash;
   } catch (error) {
-    throw new Error(error.message);
+    throw new Error(`Swapping failed: ${error.message}`);
   }
 };
 
-async function USDC_TO_ETH(
-  usdcAmount,
-  routerAddress,
+async function buildPath(fromToken, toToken) {
+
+    console.log("Building path for:", fromToken.symbol, "to", toToken.symbol);
+  const weth = await TokenRegistry.findOne({ where: { symbol: "WETH" } });
+  if (fromToken.isNative) {
+    return [weth.address, toToken.address];
+  }
+
+  if (toToken.isNative) {
+    return [fromToken.address, weth.address];
+  }
+
+  return [fromToken.address, weth.address, toToken.address];
+}
+
+async function approveIfNeeded(token, owner, spender, amount, wallet) {
+  if (token.isNative) return;
+
+  const ERC20_ABI = [
+    "function approve(address spender, uint256 amount) public returns (bool)",
+    "function decimals() view returns (uint8)",
+    "function balanceOf(address owner) view returns (uint256)",
+  ];
+
+  const erc20 = new ethers.Contract(token.address, ERC20_ABI, wallet);
+
+  const balance = await erc20.balanceOf(owner);
+  if (balance < amount) {
+    throw new Error(`Not enough ${token.symbol}`);
+  }
+
+  const tx = await erc20.approve(spender, amount);
+
+  console.log(`Approving ${amount.toString()} of ${token.symbol} for ${spender}:`, tx);
+  const tx_wait = await tx.wait();
+  console.log(`Approval Transaction Receipt:`, tx_wait);
+
+  return tx_wait;
+}
+
+async function swap({
+  amount,
+  fromSymbol,
+  toSymbol,
   wallet,
   router,
-  ERC20_ABI,
-  WETH_Address,
-  USDC_Address,
   deadline,
-) {
-  const path = [USDC_Address, WETH_Address];
+}) {
 
-  const amountIn = ethers.parseUnits(usdcAmount.toString(), 6);
 
-  console.log("Aproving USDC...........");
+  const fromToken = await TokenRegistry.findOne({ where: { id: fromSymbol } });
 
-  const usdcContract = new ethers.Contract(USDC_Address, ERC20_ABI, wallet);
+  console.log("From Token:", fromToken);
+  const toToken = await TokenRegistry.findOne({ where: { id: toSymbol } });
+  console.log("To Token:", toToken);
 
-  const usdcBalance = await usdcContract.balanceOf(wallet.address);
-  const usdcReadable = ethers.formatUnits(usdcBalance, 6);
-
-  console.log("USDC Balance:", usdcReadable);
-
-  if (usdcAmount > usdcReadable) {
-    throw new Error("Not enough USDC in your wallet");
+  if (!fromToken || !toToken) {
+    throw new Error("Unsupported token");
   }
 
-  console.log("Router Address: ", routerAddress);
-  console.log("USDC Address: ", USDC_Address);
+  const path = await buildPath(fromToken, toToken);
 
-  const approveTx = await usdcContract.approve(routerAddress, amountIn);
+  console.log("Swap Path:", path);
 
-  if (!approveTx) {
-    throw new Error(`USDC Not Approved`);
+  const amountIn = ethers.parseUnits(amount.toString(), fromToken.decimals);
+
+  console.log("Amount In (raw):", amountIn.toString());
+
+  // --------------------
+  // ETH → TOKEN
+  // --------------------
+  if (fromToken.isNative) {
+    return await router.swapExactETHForTokens(
+      0,
+      path,
+      wallet.address,
+      deadline,
+      { value: amountIn },
+    );
   }
-  const approveWait = await approveTx.wait();
 
-  console.log("USDC Approved");
+  // approve ERC20
+ const approval = await approveIfNeeded(
+    fromToken,
+    wallet.address,
+    router.target,
+    amountIn,
+    wallet,
+  );
 
-  if (!approveWait) {
-    throw new Error("Waiting for USDC Approval Failed");
+  console.log("Approval Result:", approval);
+  console.log("Path:", path);
+
+  // --------------------
+  // TOKEN → ETH
+  // --------------------
+  if (toToken.isNative) {
+    return await router.swapExactTokensForETH(
+      amountIn,
+      0,
+      path,
+      wallet.address,
+      deadline,
+    );
   }
 
-  const tx = await router.swapExactTokensForETH(
+  // --------------------
+  // TOKEN → TOKEN
+  // --------------------
+  return await router.swapExactTokensForTokens(
     amountIn,
     0,
     path,
     wallet.address,
     deadline,
   );
-
-  console.log("TX: ", tx);
-
-  const txWait = await tx.wait();
-
-  return txWait;
-}
-
-async function ETH_TO_USDC(
-  ethAmount,
-  routerAddress,
-  wallet,
-  router,
-  ERC20_ABI,
-  WETH_Address,
-  USDC_Address,
-  deadline,
-) {
-  const path = [WETH_Address, USDC_Address];
-
-  const amountIn = ethers.parseEther(ethAmount.toString());
-
-  console.log("Aproving ETH...........");
-
-  const ethContract = new ethers.Contract(WETH_Address, ERC20_ABI, wallet);
-  console.log("Router Address: ", routerAddress);
-  console.log("WETH Address: ", WETH_Address);
-
-  const approveTx = await ethContract.approve(routerAddress, amountIn);
-
-  if (!approveTx) {
-    throw new Error(`ETH Not Approved`);
-  }
-
-  const approveWait = await approveTx.wait();
-
-  if (!approveWait) {
-    throw new Error("Waiting for USDC Approval Failed");
-  }
-
-  const tx = await router.swapExactETHForTokens(
-    0,
-    path,
-    wallet.address,
-    deadline,
-    { value: ethers.parseEther(ethAmount.toString()) },
-  );
-
-  console.log("TX: ", tx);
-
-  const txWait = await tx.wait();
-
-  return txWait;
 }
 
 export const tokenEquivalentAmount = async (req) => {
   try {
-    const { amount, token } = req.query;
+    const { amount, from, to } = req.query;
 
-    if (!amount || !token) {
-      throw new Error("amount and token required");
+    if (!amount || !from || !to) {
+      throw new Error("amount, from, and to tokens are required");
     }
-
-    const normalizedToken = token.toLowerCase();
-
-    if (normalizedToken !== "usdc" && normalizedToken !== "eth") {
-      throw new Error("Only USDC and ETH supported on testnet");
-    }
-
-    // Chainlink ETH / USD feed (Sepolia)
-    const ETH_USD_FEED = "0x694AA1769357215DE4FAC081bf1f309aDC325306";
-
-    const aggregatorAbi = [
-      "function latestRoundData() view returns (uint80, int256, uint256, uint256, uint80)",
-      "function decimals() view returns (uint8)",
-    ];
-
-    const priceFeed = new ethers.Contract(
-      ETH_USD_FEED,
-      aggregatorAbi,
-      ethProvider,
-    );
-
-    // Fetch ETH/USD price
-    const [, answer] = await priceFeed.latestRoundData();
-    const decimals = await priceFeed.decimals();
-
-    // BigInt → Number (safe)
-    const ethUsdPrice = Number(ethers.formatUnits(answer, decimals));
 
     const inputAmount = Number(amount);
-
-    if (inputAmount <= 0) {
-      throw new Error("amount must be greater than 0");
+    if (isNaN(inputAmount) || inputAmount <= 0) {
+      throw new Error("Amount must be greater than 0");
     }
 
-    // -------------------------------
-    // USDC → ETH
-    // -------------------------------
-    if (normalizedToken === "usdc") {
-      // 1 USDC ≈ 1 USD
-      const ethEquivalent = inputAmount / ethUsdPrice;
+    // Fetch tokens
+    const fromToken = await TokenRegistry.findOne({ where: { id: from } });
+    const toToken = await TokenRegistry.findOne({ where: { id: to } });
 
-      return {
-        from: "USDC",
-        to: "ETH",
-        inputAmount,
-        outputAmount: ethEquivalent,
-      };
+    if (!fromToken || !toToken) {
+      throw new Error("Unsupported token");
     }
 
-    // -------------------------------
-    // ETH → USDC
-    // -------------------------------
-    if (normalizedToken === "eth") {
-      const usdcEquivalent = inputAmount * ethUsdPrice;
-
-      return {
-        from: "ETH",
-        to: "USDC",
-        inputAmount,
-        outputAmount: usdcEquivalent,
-      };
+    // Fetch WETH
+    const weth = await TokenRegistry.findOne({ where: { symbol: "WETH" } });
+    if (!weth) {
+      throw new Error("WETH not found in registry");
     }
+
+    // Uniswap V2 Router
+    const routerAddress = process.env.UNI_SWAP_ROUTER_ADDRESS;
+    const ROUTER_ABI = [
+      "function getAmountsOut(uint amountIn, address[] calldata path) view returns (uint[] memory amounts)"
+    ];
+
+    const router = new ethers.Contract(routerAddress, ROUTER_ABI, ethProvider);
+
+    // Resolve actual addresses (ETH → WETH)
+    const fromAddress = fromToken.isNative ? weth.address : fromToken.address;
+    const toAddress = toToken.isNative ? weth.address : toToken.address;
+
+    // Build path
+    const path = _buildPath(fromAddress, toAddress, weth.address);
+
+    // Parse input amount
+    const amountIn = ethers.parseUnits(
+      inputAmount.toString(),
+      fromToken.isNative ? 18 : fromToken.decimals
+    );
+
+    console.log("---- RATE CALCULATION ----");
+    console.log("From:", fromToken.symbol);
+    console.log("To:", toToken.symbol);
+    console.log("Input:", inputAmount);
+    console.log("Path:", path);
+
+    // Get amounts out
+    const amountsOut = await router.getAmountsOut(amountIn, path);
+
+    // Final output
+    const rawOutput = amountsOut[amountsOut.length - 1];
+
+    const outputAmount = ethers.formatUnits(
+      rawOutput,
+      toToken.isNative ? 18 : toToken.decimals
+    );
+
+    return {
+      from: fromToken.symbol,
+      to: toToken.symbol,
+      inputAmount: inputAmount.toString(),
+      outputAmount,
+    };
   } catch (err) {
-    console.error(err);
-    throw err; // let controller handle response
+    console.error("tokenEquivalentAmount error:", err.message);
+    throw err;
   }
 };
+
+/**
+ * Build optimal Uniswap V2 path
+ */
+function _buildPath(from, to, weth) {
+  // Direct WETH pair
+  if (from === weth || to === weth) {
+    return [from, to];
+  }
+
+  // Route through WETH
+  return [from, weth, to];
+}

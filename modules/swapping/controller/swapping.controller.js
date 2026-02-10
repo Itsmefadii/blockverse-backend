@@ -1,9 +1,10 @@
-import { swappingService, tokenEquivalentAmount } from "../services/swapping.services.js";
+import { tokenEquivalentAmount } from "../services/swapping.services.js";
 import { apiResponse } from "../../../utils/utils.js";
+import { SwappingService } from "../services/swapping.services.js";
 
 export const swappingController = async (req, reply) => {
   try {
-    const data = await swappingService(req);
+    const data = await SwappingService(req);
 
     return reply
       .status(200)

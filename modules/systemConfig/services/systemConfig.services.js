@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import { Tokens } from "../../transaction/model/token.model.js";
+import { TokenRegistry } from "../models/TokenRegistry.model.js";
 
 export const tokenListingServices = async (req) => {
   try {
@@ -27,3 +28,26 @@ export const tokenListingServices = async (req) => {
     throw new Error(error.message);
   }
 };
+
+export const tokenRegistryListingService = async (req) => {
+  try {
+
+    let tokens
+    if(req.query?.tokenId){
+      tokens = await TokenRegistry.findAll({
+        where: {
+          id: {
+            [Op.ne]: req.query.tokenId,
+          },
+        },
+        attributes: ["id", "symbol"],
+      });
+      return tokens
+    }
+    tokens = await TokenRegistry.findAll({ attributes: ["id", "symbol"] });
+
+    return tokens;
+  } catch (error) {
+    throw new Error(error.message);
+  }
+}
