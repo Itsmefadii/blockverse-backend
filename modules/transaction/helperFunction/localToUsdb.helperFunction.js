@@ -35,7 +35,7 @@ export const Local_TO_USDB = async (user, amount, from) => {
       where: {
         id: from,
       },
-      attributes: ["tokenAddress"],
+      attributes: ["tokenName", "tokenAddress"],
     });
     console.log("USDB_Address: ", process.env.USDB_CONTRACT);
     const burnContract = new ethers.Contract(
@@ -121,10 +121,11 @@ export const Local_TO_USDB = async (user, amount, from) => {
     console.log("withdrawTransactionWait: ", withdrawTransactionWait);
 
     return {
-      txHash: burningTransactionWait.hash,
-      event: encodedEventData,
+      flow: `${localTokenAddress.tokenName} To USDB`,
+      txHash: withdrawTransactionWait.hash,
+      intent: encodedEventData,
       signature: _signature1,
-      withdraw: withdrawTransactionWait.hash,
+      amount: amount,
     };
   } catch (error) {}
 };

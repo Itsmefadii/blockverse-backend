@@ -110,10 +110,11 @@ export const USDB_TO_USDC = async (user, amount) => {
     console.log("withdrawTransactionWait: ", withdrawTransactionWait);
 
     return {
-      txHash: burningTransactionWait.hash,
-      event: encodedEventData,
+      flow: "USDB To USDC",
+      txHash: withdrawTransactionWait.hash,
+      intent: encodedEventData,
       signature: _signature1,
-      withdraw: withdrawTransactionWait.hash,
+      amount: amount,
     };
   } catch (error) {
     throw new Error(error.message);

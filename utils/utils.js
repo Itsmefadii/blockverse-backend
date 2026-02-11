@@ -81,11 +81,23 @@ export const getTokenBalance = async (walletAddress) => {
 
       const formattedBalance = ethers.formatUnits(balance, decimals);
 
+      const pkrValue = Math.random() * 3 + 276; // Simulate PKR value for demonstration
+
       totalBalance += Number(formattedBalance);
+
+      if (token[i].isLocalToken === true && token[i].tokenName !== "USDB") {
+        balances.push({
+          tokenName: token[i].tokenName,
+          balance: formattedBalance,
+          pkrValue: pkrValue.toFixed(2),
+        });
+      }
+      if (token[i].isLocalToken === true && token[i].tokenName === "USDB") {
       balances.push({
         tokenName: token[i].tokenName,
         balance: formattedBalance,
       });
+    }
     }
 
     return { totalBalance: `$${totalBalance.toFixed(2)}`, balances };

@@ -31,9 +31,8 @@ export const tokenListingServices = async (req) => {
 
 export const tokenRegistryListingService = async (req) => {
   try {
-
-    let tokens
-    if(req.query?.tokenId){
+    let tokens;
+    if (req.query?.tokenId) {
       tokens = await TokenRegistry.findAll({
         where: {
           id: {
@@ -42,12 +41,17 @@ export const tokenRegistryListingService = async (req) => {
         },
         attributes: ["id", "symbol"],
       });
-      return tokens
+      return tokens;
     }
-    tokens = await TokenRegistry.findAll({ attributes: ["id", "symbol"] });
+    tokens = await TokenRegistry.findAll({
+      where: {
+        isVisible: true,
+      },
+      attributes: ["id", "symbol"],
+    });
 
     return tokens;
   } catch (error) {
     throw new Error(error.message);
   }
-}
+};

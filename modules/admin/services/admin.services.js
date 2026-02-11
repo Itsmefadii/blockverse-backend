@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
 import { Tokens } from "../../transaction/model/token.model.js";
 import { ethProvider } from "../../../utils/utils.js";
+import sequelize from "../../../config/db.js";
 
 export const registerRemoteDomainService = async (req) => {
   try {
@@ -15,7 +16,7 @@ export const registerRemoteDomainService = async (req) => {
       tokenAddress,
       isLocalToken: 1,
       remoteDomain,
-      tokenType: "LOCAL"
+      tokenType: "LOCAL",
     });
 
     if (!addToken) {
@@ -125,12 +126,48 @@ export const reserveBalanceService = async (req) => {
         tokenName: localTokens[i].tokenName,
         totalSupply: usdb_Formatted_balance,
       });
-    } 
+    }
     return {
       USDC_XReserve_Balance: USDC_formattedBalance,
       USDB_XReserve_Balance: usdb_Formatted_balance,
       localTokenTotalSupply,
     };
+  } catch (error) {
+    throw new Error(error.message);
+  }
+};
+
+export const getAllAttestationsService = async (req) => {
+  try {
+    if (req.user.role !== "admin") {
+      throw new Error("Unauthorized Access");
+    }
+
+    let limit = req.query.limit ? parseInt(req.query.limit) : 10;
+    let offset = req.query.offsett ? parseInt(req.query.offsett) : 0;
+
+    let whereClause = "";
+
+    if(req.query.transId){
+      whereClause = `WHERE a.id = ${req.query.transId}`;
+    }
+    if(req.query.searchBy === "username"){
+      whereClause = `WHERE u.name LIKE '%${req.query.searchTXT}%'`;
+    }
+    if(req.query.searchBy === "email"){
+      whereClause = `WHERE u.email LIKE '%${req.query.searchTXT}%'`;
+    }
+
+    if(limit && offset){
+      whereClause += ` LIMIT ${limit} OFFSET ${offset}`;
+    }
+
+    const [attestation] = await sequelize.query(`
+      SELECT a.id as transactionId, u.name AS userName, u.email, a.transactionFlow, a.transactionData, a.attestedBy, a.createdAt 
+      FROM Attestations a LEFT JOIN user u ON u.id = a.userId
+      ${whereClause};`);
+
+    return attestation;
   } catch (error) {
     throw new Error(error.message);
   }

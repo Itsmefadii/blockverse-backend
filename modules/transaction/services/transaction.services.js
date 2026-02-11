@@ -13,6 +13,7 @@ import {
 } from "../../../utils/utils.js";
 import { USDB_TO_USDC } from "../helperFunction/usdbToUsdc.helperFunction.js";
 import { Local_TO_USDB } from "../helperFunction/localToUsdb.helperFunction.js";
+import { Attestations } from "../model/attestation.model.js";
 
 export const transferTokenService = async (req) => {
   try {
@@ -24,17 +25,13 @@ export const transferTokenService = async (req) => {
       throw new Error("Enter Valid Amount");
     }
 
-
-  
-    if(req.query.tokenId === "eth"){
-      const ethToOtherWallet1 = await ethToOtherWallet(req)
-      if(!ethToOtherWallet1){
+    if (req.query.tokenId === "eth") {
+      const ethToOtherWallet1 = await ethToOtherWallet(req);
+      if (!ethToOtherWallet1) {
         throw new Error("Transfer From ETH to Other Wallet Failed");
       }
-      return{data : ethToOtherWallet1}
+      return { data: ethToOtherWallet1 };
     }
-
-
 
     const privateKey = await User.findOne({
       where: { id: req.user.id },
@@ -130,19 +127,20 @@ export const transactionApprovalService = async (req) => {
     let usdbToLocal;
     let usdbToUsdc;
     let localToUsdb;
+    const transactionData = [];
 
     const fromTokenType = await Tokens.findOne({
       where: {
         id: from,
       },
-      attributes: ["tokenType"],
+      attributes: ["tokenName", "tokenType"],
     });
 
     const toTokenType = await Tokens.findOne({
       where: {
         id: to,
       },
-      attributes: ["tokenType"],
+      attributes: ["tokenName", "tokenType"],
     });
     console.log(
       "fromTokenType:",
@@ -156,6 +154,7 @@ export const transactionApprovalService = async (req) => {
       toTokenType.tokenType === "USDB"
     ) {
       usdcToUsdb = await USDC_TO_USDB(user, amount, to);
+      transactionData.push(usdcToUsdb);
     }
 
     if (
@@ -163,6 +162,7 @@ export const transactionApprovalService = async (req) => {
       toTokenType.tokenType === "LOCAL"
     ) {
       usdbToLocal = await USDB_TO_LOCAL(user, amount, to);
+      transactionData.push(usdbToLocal);
     }
 
     if (
@@ -176,7 +176,9 @@ export const transactionApprovalService = async (req) => {
         attributes: ["id"],
       });
       usdcToUsdb = await USDC_TO_USDB(user, amount, tokedId.id);
+      transactionData.push(usdcToUsdb);
       usdbToLocal = await USDB_TO_LOCAL(user, amount, to);
+      transactionData.push(usdbToLocal);
     }
 
     if (
@@ -185,11 +187,13 @@ export const transactionApprovalService = async (req) => {
     ) {
       console.log("Conversion from LOCAL to USDC initiated");
       localToUsdb = await Local_TO_USDB(user, amount, from);
-      if(!localToUsdb){
+      if (!localToUsdb) {
         throw new Error("Conversion from Local to USDB failed");
       }
+      transactionData.push(localToUsdb);
       console.log("Conversion from USDB to USDC initiated");
       usdbToUsdc = await USDB_TO_USDC(user, amount);
+      transactionData.push(usdbToUsdc);
     }
 
     if (
@@ -198,9 +202,10 @@ export const transactionApprovalService = async (req) => {
     ) {
       console.log("Conversion from LOCAL to USDC initiated");
       localToUsdb = await Local_TO_USDB(user, amount, from);
-      if(!localToUsdb){
+      if (!localToUsdb) {
         throw new Error("Conversion from Local to USDB failed");
       }
+      transactionData.push(localToUsdb);
       // console.log("Conversion from USDB to USDC initiated");
       // usdbToUsdc = await USDB_TO_USDC(user, amount);
     }
@@ -210,37 +215,49 @@ export const transactionApprovalService = async (req) => {
       toTokenType.tokenType === "USDC"
     ) {
       usdbToUsdc = await USDB_TO_USDC(user, amount);
+      transactionData.push(usdbToUsdc);
     }
 
-    if(fromTokenType.tokenType === "LOCAL" &&
+    if (
+      fromTokenType.tokenType === "LOCAL" &&
       toTokenType.tokenType === "LOCAL"
-    ){
+    ) {
       console.log("Conversion from LOCAL to LOCAL initiated");
 
       localToUsdb = await Local_TO_USDB(user, amount, from);
-      if(!localToUsdb){
+      if (!localToUsdb) {
         throw new Error("Conversion From Local To USDB Failed");
       }
-
+      transactionData.push(localToUsdb);
       usdbToLocal = await USDB_TO_LOCAL(user, amount, to);
-      if(!usdbToLocal){
+      if (!usdbToLocal) {
         throw new Error("Conversion From USDB to Local Failed");
       }
-      return{data : usdbToLocal}
+      transactionData.push(usdbToLocal);
     }
 
-    if (usdcToUsdb) {
-      return { data: usdcToUsdb };
-    }
-    if (usdbToLocal || (usdcToUsdb && usdbToLocal)) {
-      return { data: usdbToLocal };
-    }
-    if (usdbToUsdc) {
-      return { data: usdbToUsdc };
-    }
-    if(localToUsdb){
-      return { data: localToUsdb.withdraw };
-    }
+    console.log("Transaction Data: ", transactionData);
+
+    const attestations = await Attestations.create({
+      transactionFlow: `${fromTokenType.tokenType} to ${toTokenType.tokenType}`,
+      transactionData: transactionData,
+      userId: req.user.id,
+      attestedBy: process.env.ADMIN_ADDRESS,
+    });
+
+    return attestations;
+    // if (usdcToUsdb) {
+    //   return { data: usdcToUsdb };
+    // }
+    // if (usdbToLocal || (usdcToUsdb && usdbToLocal)) {
+    //   return { data: usdbToLocal };
+    // }
+    // if (usdbToUsdc) {
+    //   return { data: usdbToUsdc };
+    // }
+    // if(localToUsdb){
+    //   return { data: localToUsdb.withdraw };
+    // }
   } catch (error) {
     throw new Error(error.message);
   }
@@ -420,32 +437,28 @@ const _signature = async (privateKey, data) => {
   return signature;
 };
 
-
 const ethToOtherWallet = async (req) => {
-console.log("req.user" , req.user)
+  console.log("req.user", req.user);
   const privateKey = await User.findOne({
-    where : { id : req.user.id },
-    attributes : ["privateKey"],
+    where: { id: req.user.id },
+    attributes: ["privateKey"],
   });
 
   let provider = ethProvider;
-    let adminWallet = new ethers.Wallet(
-      privateKey.privateKey,
-      provider,
-    );
+  let adminWallet = new ethers.Wallet(privateKey.privateKey, provider);
 
-    const {amount, toAddress} = req.body;
+  const { amount, toAddress } = req.body;
 
-    const tx = await adminWallet.sendTransaction({
-      to: toAddress,
-      value: ethers.parseEther(amount),
-    });
+  const tx = await adminWallet.sendTransaction({
+    to: toAddress,
+    value: ethers.parseEther(amount),
+  });
 
-    if (!tx) throw new Error("Transaction Not Initiated");
-    console.log("Transaction Initiated:", tx.hash);
-    const txWait = await tx.wait();
-    if (!txWait) throw new Error("Transaction Failed");
-    console.log("Transaction Successful:", txWait.hash);
+  if (!tx) throw new Error("Transaction Not Initiated");
+  console.log("Transaction Initiated:", tx.hash);
+  const txWait = await tx.wait();
+  if (!txWait) throw new Error("Transaction Failed");
+  console.log("Transaction Successful:", txWait.hash);
 
-    return txWait;
-}
+  return txWait;
+};

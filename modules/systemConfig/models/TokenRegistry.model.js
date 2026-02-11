@@ -13,6 +13,7 @@ export const TokenRegistry = sequelize.define(
    address: DataTypes.STRING,
    decimals: DataTypes.INTEGER,
    isNative: DataTypes.BOOLEAN,
+   isVisible: DataTypes.BOOLEAN,
   },
   {
     freezeTableName: true,

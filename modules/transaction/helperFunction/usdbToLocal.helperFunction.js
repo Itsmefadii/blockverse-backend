@@ -40,7 +40,7 @@ export const USDB_TO_LOCAL = async (user, amount, tokenId) => {
 
       const contractAddress = await Tokens.findOne({
         where: { id: tokenId },
-        attributes: ["tokenAddress"],
+        attributes: ["tokenName", "tokenAddress"],
       });
 
       const remoteDomainContract = new ethers.Contract(
@@ -50,8 +50,6 @@ export const USDB_TO_LOCAL = async (user, amount, tokenId) => {
       );
 
       const remoteDomain = await remoteDomainContract.domain();
-
-      
 
       const formattedRemoteDomain = Number(remoteDomain);
 
@@ -139,8 +137,10 @@ export const USDB_TO_LOCAL = async (user, amount, tokenId) => {
       console.log(localTokenMintWait);
 
       return {
+        flow: `USDB To ${contractAddress.tokenName}`,
         txHash: localTokenMintWait.hash,
         intent: localTokenMint.data,
+        signature: signature1,
         amount: amount
       }
     }

@@ -21,7 +21,7 @@ export const transactionApprovalController = async (req, reply) => {
 
     return reply
       .status(200)
-      .send(apiResponse(true, "Successfully Converted", data.data, 200, "success"));
+      .send(apiResponse(true, "Successfully Converted", data, 200, "success"));
   } catch (error) {
     return reply
       .status(400)
