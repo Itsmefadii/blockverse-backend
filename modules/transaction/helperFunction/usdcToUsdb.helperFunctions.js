@@ -6,7 +6,6 @@ import {
   signature,
 } from "../../../utils/utils.js";
 import { User } from "../../auth/models/user.model.js";
-
 import { randomHookData } from "../../../utils/utils.js";
 import { Tokens } from "../model/token.model.js";
 

@@ -68,18 +68,22 @@ export const USDB_TO_LOCAL = async (user, amount, tokenId) => {
       const wait = await tx.wait();
       console.log("wait", wait);
 
-      const fullABI = JSON.parse(fs.readFileSync("./XReserve.json", "utf8"));
+      // const fullABI = JSON.parse(fs.readFileSync("./XReserve.json", "utf8"));
 
-      // Filter only the depositToRemote function
-      const depositToRemoteABI = fullABI.filter(
-        (item) => item.type === "function" && item.name === "depositToRemote",
-      );
+      // // Filter only the depositToRemote function
+      // const depositToRemoteABI = fullABI.filter(
+      //   (item) => item.type === "function" && item.name === "depositToRemote",
+      // );
 
-      const depositToRemoteStringABI = depositToRemoteABI.map((func) => {
-        const inputs = func.inputs.map((i) => i.type).join(", ");
-        return `function ${func.name}(${inputs})`;
-      });
+      // const depositToRemoteStringABI = depositToRemoteABI.map((func) => {
+      //   const inputs = func.inputs.map((i) => i.type).join(", ");
+      //   return `function ${func.name}(${inputs})`;
+      // });
 
+      const depositToRemoteStringABI = [
+      "function depositToRemote(uint256 value, uint32 remoteDomain, bytes32 remoteRecipien, address localToken, uint256 maxFee, bytes hookData) external",
+    ];
+    
       console.log(depositToRemoteStringABI);
 
       const xreserve = new ethers.Contract(
