@@ -6,11 +6,9 @@ import {
   signature,
 } from "../../../utils/utils.js";
 import { User } from "../../auth/models/user.model.js";
-import fs from "fs";
+
 import { randomHookData } from "../../../utils/utils.js";
 import { Tokens } from "../model/token.model.js";
-import path from "path";
-import XReserveABI from "../abi/XReserve.json" assert { type: "json" };
 
 
 export const USDC_TO_USDB = async (user, amount, to) => {
@@ -78,19 +76,22 @@ export const USDC_TO_USDB = async (user, amount, to) => {
     console.log("Approval Transaction Hash:", tx);
     const receipt = await tx.wait();
     console.log("Approval Transaction Receipt:", receipt);
-    const filePath = path.join(__dirname, "XReserve.json");
-    const fullABI = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    // const filePath = path.join(__dirname, "XReserve.json");
+    // const fullABI = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
-    // Filter only the depositToRemote function
-    const depositToRemoteABI = XReserveABI.filter(
-  (item) => item.type === "function" && item.name === "depositToRemote"
-);
+    // // Filter only the depositToRemote function
+    // const depositToRemoteABI = fullABI.filter(
+    //   (item) => item.type === "function" && item.name === "depositToRemote",
+    // );
 
-const depositToRemoteStringABI = depositToRemoteABI.map((func) => {
-  const inputs = func.inputs.map((i) => i.type).join(", ");
-  return `function ${func.name}(${inputs})`;
-});
+    // const depositToRemoteStringABI = depositToRemoteABI.map((func) => {
+    //   const inputs = func.inputs.map((i) => i.type).join(", ");
+    //   return `function ${func.name}(${inputs})`;
+    // });
 
+    const depositToRemoteStringABI = [
+      "function depositToRemote(uint256 value, uint32 remoteDomain, bytes32 remoteRecipien, address localToken, uint256 maxFee, bytes hookData) external",
+    ];
 
     console.log(depositToRemoteStringABI);
 
