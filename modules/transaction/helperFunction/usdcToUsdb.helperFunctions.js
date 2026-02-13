@@ -10,10 +10,8 @@ import fs from "fs";
 import { randomHookData } from "../../../utils/utils.js";
 import { Tokens } from "../model/token.model.js";
 import path from "path";
-import { fileURLToPath } from "url";
+import XReserveABI from "../abi/XReserve.json" assert { type: "json" };
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export const USDC_TO_USDB = async (user, amount, to) => {
   try {
@@ -84,14 +82,15 @@ export const USDC_TO_USDB = async (user, amount, to) => {
     const fullABI = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
     // Filter only the depositToRemote function
-    const depositToRemoteABI = fullABI.filter(
-      (item) => item.type === "function" && item.name === "depositToRemote",
-    );
+    const depositToRemoteABI = XReserveABI.filter(
+  (item) => item.type === "function" && item.name === "depositToRemote"
+);
 
-    const depositToRemoteStringABI = depositToRemoteABI.map((func) => {
-      const inputs = func.inputs.map((i) => i.type).join(", ");
-      return `function ${func.name}(${inputs})`;
-    });
+const depositToRemoteStringABI = depositToRemoteABI.map((func) => {
+  const inputs = func.inputs.map((i) => i.type).join(", ");
+  return `function ${func.name}(${inputs})`;
+});
+
 
     console.log(depositToRemoteStringABI);
 
