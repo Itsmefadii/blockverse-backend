@@ -1,4 +1,4 @@
-import { getAllAttestationsController, registerRemoteDomainController, reservebalanceController } from "../controller/admin.controller.js";
+import { deregisterRemoteDomainController, getAllAttestationsController, registerRemoteDomainController, reservebalanceController } from "../controller/admin.controller.js";
 
 export const adminRoutes = (fastify, options, done) => {
     fastify.route({
@@ -7,6 +7,9 @@ export const adminRoutes = (fastify, options, done) => {
         handler: (req, reply) => {
           if (req.method == "POST") {
             registerRemoteDomainController(req, reply);
+          }
+          if (req.method == "DELETE") {
+            deregisterRemoteDomainController(req, reply);
           }
         },
       });

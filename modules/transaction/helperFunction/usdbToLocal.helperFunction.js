@@ -138,6 +138,7 @@ export const USDB_TO_LOCAL = async (user, amount, tokenId) => {
 
       return {
         flow: `USDB To ${contractAddress.tokenName}`,
+        isMint: true,
         txHash: localTokenMintWait.hash,
         intent: localTokenMint.data,
         signature: signature1,

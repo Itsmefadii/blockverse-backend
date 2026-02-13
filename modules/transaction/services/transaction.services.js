@@ -42,7 +42,7 @@ export const transferTokenService = async (req) => {
 
     const tokenAddress = await Tokens.findOne({
       where: { id: tokenId },
-      attributes: ["tokenAddress", "chainAddress"],
+      attributes: ["tokenAddress"],
     });
 
     console.log("Token Address:", tokenAddress);
@@ -111,13 +111,29 @@ export const transferTokenService = async (req) => {
   }
 };
 
-export const transactionApprovalService = async (req) => {
+export const transactionApprovalService = async (req, _user, _amount, _from, _to) => {
   try {
-    const user = req.user;
+    console.log("Inside transactionApprovalService");
+    
+    const user = req?.user || _user;
+    // console.log("Req user: ",req.user)
+    console.log("_user: ", _user);
 
-    // const { amount, tokenId, sourceId } = req.body;
+    let amount
+    let from;
+    let to;
+    if(!req?.body){
+      amount = _amount.toString();
+      to = _to;
+      from = _from
+    } else {
+      amount = req.body.amount;
+      from = req.body.from;
+      to = req.body.to;
+    }
+    // const { amount, from, to } = req.body;
 
-    const { amount, from, to } = req.body;
+
 
     if (amount == 0) {
       throw new Error("Invalid Amount");
@@ -187,9 +203,9 @@ export const transactionApprovalService = async (req) => {
     ) {
       console.log("Conversion from LOCAL to USDC initiated");
       localToUsdb = await Local_TO_USDB(user, amount, from);
-      if (!localToUsdb) {
-        throw new Error("Conversion from Local to USDB failed");
-      }
+      // if (!localToUsdb) {
+      //   throw new Error("Conversion from Local to USDB failed");
+      // }
       transactionData.push(localToUsdb);
       console.log("Conversion from USDB to USDC initiated");
       usdbToUsdc = await USDB_TO_USDC(user, amount);
@@ -239,9 +255,9 @@ export const transactionApprovalService = async (req) => {
     console.log("Transaction Data: ", transactionData);
 
     const attestations = await Attestations.create({
-      transactionFlow: `${fromTokenType.tokenType} to ${toTokenType.tokenType}`,
+      transactionFlow: `${fromTokenType.tokenName} to ${toTokenType.tokenName}`,
       transactionData: transactionData,
-      userId: req.user.id,
+      userId: req?.user?.id || _user.id,
       attestedBy: process.env.ADMIN_ADDRESS,
     });
 

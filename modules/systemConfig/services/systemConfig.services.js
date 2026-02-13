@@ -13,7 +13,9 @@ export const tokenListingServices = async (req) => {
         where: {
           id: {
             [Op.ne]: tokenId,
+            
           },
+          [Op.or]: [{ tokenName: "USDC" }, { islocalToken: true }]
         },
         attributes: ["id", "names", "tokenName"],
       });
@@ -21,7 +23,12 @@ export const tokenListingServices = async (req) => {
       return token;
     }
 
-    token = await Tokens.findAll({ attributes: ["id", "names", "tokenName"] });
+    token = await Tokens.findAll({
+      where: {
+        [Op.or]: [{ tokenName: "USDC" }, { islocalToken: true }],
+      },
+      attributes: ["id", "names", "tokenName"],
+    });
 
     return token;
   } catch (error) {
@@ -31,26 +38,26 @@ export const tokenListingServices = async (req) => {
 
 export const tokenRegistryListingService = async (req) => {
   try {
-    let tokens;
+    let token;
     if (req.query?.tokenId) {
-      tokens = await TokenRegistry.findAll({
+      token = await Tokens.findAll({
         where: {
           id: {
             [Op.ne]: req.query.tokenId,
           },
         },
-        attributes: ["id", "symbol"],
+        attributes: ["id", "tokenName"],
       });
-      return tokens;
+      return token;
     }
-    tokens = await TokenRegistry.findAll({
+    token = await Tokens.findAll({
       where: {
         isVisible: true,
       },
-      attributes: ["id", "symbol"],
+      attributes: ["id", "tokenName"],
     });
 
-    return tokens;
+    return token;
   } catch (error) {
     throw new Error(error.message);
   }

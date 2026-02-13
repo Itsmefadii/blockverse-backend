@@ -1,7 +1,8 @@
 import { ethProvider } from "../../../utils/utils.js";
 import { User } from "../../auth/models/user.model.js";
-import { TokenRegistry } from "../../systemConfig/models/TokenRegistry.model.js";
 import { ethers } from "ethers";
+import { Tokens } from "../../transaction/model/token.model.js";
+import { transactionApprovalService } from "../../transaction/services/transaction.services.js";
 
 export const SwappingService = async (req) => {
   try {
@@ -11,6 +12,7 @@ export const SwappingService = async (req) => {
       "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
       "function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
       "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
+      "function getAmountsOut(uint256 amountIn, address[] memory path) external view returns (uint256[] memory amounts)",
     ];
 
     console.log("Router ABI:", ROUTER_ABI);
@@ -37,6 +39,82 @@ export const SwappingService = async (req) => {
 
     console.log("Dealine:", deadline);
 
+    const fromIsLocal = await Tokens.findOne({
+      where: { id: from },
+      attributes: ["isLocalToken"],
+    });
+
+    console.log("From Token Local Status:", fromIsLocal.isLocalToken);
+    const toIsLocal = await Tokens.findOne({
+      where: { id: to },
+      attributes: ["isLocalToken"],
+    });
+
+    console.log("To Token Local Status:", toIsLocal.isLocalToken);
+
+    if (fromIsLocal.isLocalToken === true && toIsLocal.isLocalToken === true) {
+      await transactionApprovalService(null, req.user, amount, from, to);
+
+      return true;
+    }
+
+    if (fromIsLocal.isLocalToken === false && toIsLocal.isLocalToken === true) {
+      const usdcId = await Tokens.findOne({
+        where: { tokenName: "USDC" },
+        attributes: ["id"],
+      });
+      const tx = await swap({
+        amount,
+        fromSymbol: from,
+        toSymbol: usdcId.id,
+        wallet,
+        router,
+        deadline,
+      });
+
+      console.log("Swap Transaction:", tx);
+
+      console.log("TX AMOUNT OUT", tx.amountOut);
+
+      if (tx) {
+        await transactionApprovalService(
+          null,
+          req.user,
+          tx.amountOut,
+          usdcId.id,
+          to,
+        );
+        return true;
+      }
+    }
+
+    if (fromIsLocal.isLocalToken === true && toIsLocal.isLocalToken === false) {
+      const usdcId = await Tokens.findOne({
+        where: { tokenName: "USDC" },
+        attributes: ["id"],
+      });
+      const tx = await transactionApprovalService(
+        null,
+        req.user,
+        amount,
+        from,
+        usdcId.id,
+      );
+
+      if (tx) {
+        const localSwap = await swap({
+          amount,
+          fromSymbol: usdcId.id,
+          toSymbol: to,
+          wallet,
+          router,
+          deadline,
+        });
+
+        if (localSwap) return true;
+      }
+    }
+
     const tx = await swap({
       amount,
       fromSymbol: from,
@@ -46,7 +124,7 @@ export const SwappingService = async (req) => {
       deadline,
     });
 
-    console.log("Swap Transaction:", tx)
+    console.log("Swap Transaction:", tx);
 
     const receipt = await tx.wait();
 
@@ -58,18 +136,22 @@ export const SwappingService = async (req) => {
 };
 
 async function buildPath(fromToken, toToken) {
-
-    console.log("Building path for:", fromToken.symbol, "to", toToken.symbol);
-  const weth = await TokenRegistry.findOne({ where: { symbol: "WETH" } });
+  console.log(
+    "Building path for:",
+    fromToken.tokenName,
+    "to",
+    toToken.tokenName,
+  );
+  const weth = await Tokens.findOne({ where: { tokenName: "WETH" } });
   if (fromToken.isNative) {
-    return [weth.address, toToken.address];
+    return [weth.tokenAddress, toToken.tokenAddress];
   }
 
   if (toToken.isNative) {
-    return [fromToken.address, weth.address];
+    return [fromToken.tokenAddress, weth.tokenAddress];
   }
 
-  return [fromToken.address, weth.address, toToken.address];
+  return [fromToken.tokenAddress, weth.tokenAddress, toToken.tokenAddress];
 }
 
 async function approveIfNeeded(token, owner, spender, amount, wallet) {
@@ -81,16 +163,19 @@ async function approveIfNeeded(token, owner, spender, amount, wallet) {
     "function balanceOf(address owner) view returns (uint256)",
   ];
 
-  const erc20 = new ethers.Contract(token.address, ERC20_ABI, wallet);
+  const erc20 = new ethers.Contract(token.tokenAddress, ERC20_ABI, wallet);
 
   const balance = await erc20.balanceOf(owner);
   if (balance < amount) {
-    throw new Error(`Not enough ${token.symbol}`);
+    throw new Error(`Not enough ${token.tokenName} balance for approval`);
   }
 
   const tx = await erc20.approve(spender, amount);
 
-  console.log(`Approving ${amount.toString()} of ${token.symbol} for ${spender}:`, tx);
+  console.log(
+    `Approving ${amount.toString()} of ${token.tokenName} for ${spender}:`,
+    tx,
+  );
   const tx_wait = await tx.wait();
   console.log(`Approval Transaction Receipt:`, tx_wait);
 
@@ -105,12 +190,10 @@ async function swap({
   router,
   deadline,
 }) {
-
-
-  const fromToken = await TokenRegistry.findOne({ where: { id: fromSymbol } });
+  const fromToken = await Tokens.findOne({ where: { id: fromSymbol } });
 
   console.log("From Token:", fromToken);
-  const toToken = await TokenRegistry.findOne({ where: { id: toSymbol } });
+  const toToken = await Tokens.findOne({ where: { id: toSymbol } });
   console.log("To Token:", toToken);
 
   if (!fromToken || !toToken) {
@@ -123,23 +206,32 @@ async function swap({
 
   const amountIn = ethers.parseUnits(amount.toString(), fromToken.decimals);
 
+  const amounts = await router.getAmountsOut(amountIn, path);
+
+  const amountOut = amounts[amounts.length - 1];
+
   console.log("Amount In (raw):", amountIn.toString());
+  console.log("Amount Out (raw):", amountOut.toString());
 
   // --------------------
   // ETH → TOKEN
   // --------------------
   if (fromToken.isNative) {
-    return await router.swapExactETHForTokens(
+    const tx = await router.swapExactETHForTokens(
       0,
       path,
       wallet.address,
       deadline,
       { value: amountIn },
     );
+    return {
+      hash: tx.hash,
+      amountOut: ethers.formatUnits(amountOut, toToken.decimals),
+    };
   }
 
   // approve ERC20
- const approval = await approveIfNeeded(
+  const approval = await approveIfNeeded(
     fromToken,
     wallet.address,
     router.target,
@@ -154,25 +246,34 @@ async function swap({
   // TOKEN → ETH
   // --------------------
   if (toToken.isNative) {
-    return await router.swapExactTokensForETH(
+    const tx = await router.swapExactTokensForETH(
       amountIn,
       0,
       path,
       wallet.address,
       deadline,
     );
+    return {
+      hash: tx.hash,
+      amountOut: ethers.formatUnits(amountOut, 18),
+    };
   }
 
   // --------------------
   // TOKEN → TOKEN
   // --------------------
-  return await router.swapExactTokensForTokens(
+
+  const tx = await router.swapExactTokensForTokens(
     amountIn,
     0,
     path,
     wallet.address,
     deadline,
   );
+  return {
+    hash: tx.hash,
+    amountOut: ethers.formatUnits(amountOut, toToken.decimals),
+  };
 }
 
 export const tokenEquivalentAmount = async (req) => {
@@ -183,21 +284,40 @@ export const tokenEquivalentAmount = async (req) => {
       throw new Error("amount, from, and to tokens are required");
     }
 
-    const inputAmount = Number(amount);
-    if (isNaN(inputAmount) || inputAmount <= 0) {
-      throw new Error("Amount must be greater than 0");
-    }
+    // const inputAmount = Number(amount);
 
     // Fetch tokens
-    const fromToken = await TokenRegistry.findOne({ where: { id: from } });
-    const toToken = await TokenRegistry.findOne({ where: { id: to } });
+    const fromToken = await Tokens.findOne({ where: { id: from } });
+    const toToken = await Tokens.findOne({ where: { id: to } });
+
+    const inputAmount = ethers.parseUnits(
+      amount.toString(),
+      fromToken.isNative ? 18 : fromToken.decimals,
+    );
+
+    console.log("From Token:", inputAmount);
 
     if (!fromToken || !toToken) {
       throw new Error("Unsupported token");
     }
 
+    if (
+      (fromToken.isLocalToken && toToken.isLocalToken) ||
+      (fromToken.tokenName === "USDC" && toToken.isLocalToken) ||
+      (fromToken.isLocalToken && toToken.tokenName === "USDC")
+    ) {
+      return {
+        from: fromToken.tokenName,
+        to: toToken.tokenName,
+        inputAmount: inputAmount.toString(),
+        outputAmount: inputAmount.toString(),
+      };
+    }
+
     // Fetch WETH
-    const weth = await TokenRegistry.findOne({ where: { symbol: "WETH" } });
+    const weth = await Tokens.findOne({ where: { tokenName: "WETH" } });
+    const usdc = await Tokens.findOne({ where: { tokenName: "USDC" } });
+
     if (!weth) {
       throw new Error("WETH not found in registry");
     }
@@ -205,27 +325,48 @@ export const tokenEquivalentAmount = async (req) => {
     // Uniswap V2 Router
     const routerAddress = process.env.UNI_SWAP_ROUTER_ADDRESS;
     const ROUTER_ABI = [
-      "function getAmountsOut(uint amountIn, address[] calldata path) view returns (uint[] memory amounts)"
+      "function getAmountsOut(uint amountIn, address[] calldata path) view returns (uint[] memory amounts)",
     ];
 
     const router = new ethers.Contract(routerAddress, ROUTER_ABI, ethProvider);
 
     // Resolve actual addresses (ETH → WETH)
-    const fromAddress = fromToken.isNative ? weth.address : fromToken.address;
-    const toAddress = toToken.isNative ? weth.address : toToken.address;
+    let fromAddress = fromToken.isNative
+      ? weth.tokenAddress
+      : fromToken.tokenAddress;
+    let toAddress = toToken.isNative ? weth.tokenAddress : toToken.tokenAddress;
+
+    console.log("Initial From Address:", fromAddress);
+    console.log("Initial To Address:", toAddress);
+
+    console.log(
+      "From Token Local Status:",
+      fromToken.isLocalToken,
+      "To Token Local Status:",
+      toToken.isLocalToken,
+    );
+
+    if (fromToken.isLocalToken === true && toToken.isLocalToken === false) {
+      fromAddress = usdc.tokenAddress;
+    }
+
+    console.log("Initial From Address:", fromAddress);
+    console.log("Initial To Address:", toAddress);
 
     // Build path
-    const path = _buildPath(fromAddress, toAddress, weth.address);
+    const path = _buildPath(fromAddress, toAddress, weth.tokenAddress);
+
+    console.log("Calculated Path:", path);
 
     // Parse input amount
     const amountIn = ethers.parseUnits(
       inputAmount.toString(),
-      fromToken.isNative ? 18 : fromToken.decimals
+      fromToken.isNative ? 18 : fromToken.decimals,
     );
 
     console.log("---- RATE CALCULATION ----");
-    console.log("From:", fromToken.symbol);
-    console.log("To:", toToken.symbol);
+    console.log("From:", fromToken.tokenName);
+    console.log("To:", toToken.tokenName);
     console.log("Input:", inputAmount);
     console.log("Path:", path);
 
@@ -235,14 +376,16 @@ export const tokenEquivalentAmount = async (req) => {
     // Final output
     const rawOutput = amountsOut[amountsOut.length - 1];
 
+    console.log("Raw Output Amount:", rawOutput.toString());
+
     const outputAmount = ethers.formatUnits(
       rawOutput,
-      toToken.isNative ? 18 : toToken.decimals
+      toToken.isNative ? 18 : toToken.decimals,
     );
 
     return {
-      from: fromToken.symbol,
-      to: toToken.symbol,
+      from: fromToken.tokenName,
+      to: toToken.tokenName,
       inputAmount: inputAmount.toString(),
       outputAmount,
     };

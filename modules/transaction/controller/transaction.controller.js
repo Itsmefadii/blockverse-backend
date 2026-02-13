@@ -1,5 +1,9 @@
 import { apiResponse } from "../../../utils/utils.js";
-import { ethBnbTransferService, transactionApprovalService, transferTokenService } from "../services/transaction.services.js";
+import {
+  ethBnbTransferService,
+  transactionApprovalService,
+  transferTokenService,
+} from "../services/transaction.services.js";
 
 export const transferToken = async (req, reply) => {
   try {

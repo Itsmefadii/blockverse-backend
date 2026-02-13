@@ -47,11 +47,15 @@ export const Local_TO_USDB = async (user, amount, from) => {
 
     const parsedAmount = ethers.parseUnits(amount, 6);
 
+    console.log("parsedAmount: ", parsedAmount);
+
     const burningTransaction = await burnContract.burnForUSDB(
       parsedAmount,
       "0",
       formatWalletAddress,
     );
+
+    console.log("burningTransaction: ", burningTransaction);
 
     const burningTransactionWait = await burningTransaction.wait();
     console.log("burningTransactionWait: ", burningTransactionWait);
@@ -122,10 +126,13 @@ export const Local_TO_USDB = async (user, amount, from) => {
 
     return {
       flow: `${localTokenAddress.tokenName} To USDB`,
+      isMint: false,
       txHash: withdrawTransactionWait.hash,
       intent: encodedEventData,
       signature: _signature1,
       amount: amount,
     };
-  } catch (error) {}
+  } catch (error) {
+    throw new Error(`Local to USDB conversion failed: ${error.message}`);
+  }
 };

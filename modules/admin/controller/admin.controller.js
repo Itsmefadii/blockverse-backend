@@ -1,5 +1,5 @@
 import { apiResponse } from "../../../utils/utils.js";
-import { getAllAttestationsService, registerRemoteDomainService, reserveBalanceService } from "../services/admin.services.js";
+import { deRegisterRemoteDomainService, getAllAttestationsService, registerRemoteDomainService, reserveBalanceService } from "../services/admin.services.js";
 
 export const registerRemoteDomainController = async (req, reply) => {
   try {
@@ -12,6 +12,20 @@ export const registerRemoteDomainController = async (req, reply) => {
     return reply
       .status(400)
       .send(apiResponse(false, `Remote domain registration failed: ${error.message}`, null, 500, "error"));
+  }
+};
+
+export const deregisterRemoteDomainController = async (req, reply) => {
+  try {
+    const data = await deRegisterRemoteDomainService(req);
+
+    return reply
+      .status(200)
+      .send(apiResponse(true, "Remote domain deregistered successfully", data, 200, "success"));
+  } catch (error) {
+    return reply
+      .status(400)
+      .send(apiResponse(false, `Remote domain deregistration failed: ${error.message}`, null, 500, "error"));
   }
 };
 

@@ -17,6 +17,7 @@ export const registerRemoteDomainService = async (req) => {
       isLocalToken: 1,
       remoteDomain,
       tokenType: "LOCAL",
+      isVisible: 1,
     });
 
     if (!addToken) {
@@ -95,7 +96,7 @@ export const reserveBalanceService = async (req) => {
 
     const localTokens = await Tokens.findAll({
       where: { isLocalToken: 1 },
-      attributes: ["tokenAddress", "chainAddress", "tokenName"],
+      attributes: ["tokenAddress", "tokenName"],
     });
 
     const localTokenABI = [
@@ -148,17 +149,17 @@ export const getAllAttestationsService = async (req) => {
 
     let whereClause = "";
 
-    if(req.query.transId){
+    if (req.query.transId) {
       whereClause = `WHERE a.id = ${req.query.transId}`;
     }
-    if(req.query.searchBy === "username"){
+    if (req.query.searchBy === "username") {
       whereClause = `WHERE u.name LIKE '%${req.query.searchTXT}%'`;
     }
-    if(req.query.searchBy === "email"){
+    if (req.query.searchBy === "email") {
       whereClause = `WHERE u.email LIKE '%${req.query.searchTXT}%'`;
     }
 
-    if(limit && offset){
+    if (limit && offset) {
       whereClause += ` LIMIT ${limit} OFFSET ${offset}`;
     }
 
@@ -168,6 +169,25 @@ export const getAllAttestationsService = async (req) => {
       ${whereClause};`);
 
     return attestation;
+  } catch (error) {
+    throw new Error(error.message);
+  }
+};
+
+export const deRegisterRemoteDomainService = async (req) => {
+  try {
+    if (req.user.role !== "admin") {
+      throw new Error("Unauthorized Access");
+    }
+    const { tokenAddress } = req.query;
+
+    await Tokens.destroy({
+      where: {
+        tokenAddress,
+      },
+    });
+
+    return true;
   } catch (error) {
     throw new Error(error.message);
   }

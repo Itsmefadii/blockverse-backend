@@ -111,6 +111,7 @@ export const USDB_TO_USDC = async (user, amount) => {
 
     return {
       flow: "USDB To USDC",
+      isMint: false,
       txHash: withdrawTransactionWait.hash,
       intent: encodedEventData,
       signature: _signature1,

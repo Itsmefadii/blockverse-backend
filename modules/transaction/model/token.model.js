@@ -12,10 +12,12 @@ export const Tokens = sequelize.define(
     names: DataTypes.STRING,
     tokenName: DataTypes.STRING,
     tokenAddress: DataTypes.STRING,
-    chainAddress: DataTypes.STRING,
     isLocalToken:DataTypes.BOOLEAN,
     remoteDomain: DataTypes.INTEGER,
     tokenType: DataTypes.STRING,
+    decimals: DataTypes.INTEGER,
+    isNative: DataTypes.BOOLEAN,
+    isVisible: DataTypes.BOOLEAN,
     createdAt: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

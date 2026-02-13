@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 import { Tokens } from "../modules/transaction/model/token.model.js";
 import { Wallet, keccak256, getBytes } from "ethers";
 import crypto from "crypto";
+import { Op } from "sequelize";
 
 export const apiResponse = (
   success,
@@ -45,7 +46,11 @@ export const bnbProvider = new ethers.JsonRpcProvider(
 
 export const getTokenBalance = async (walletAddress) => {
   try {
-    const token = await Tokens.findAll();
+    const token = await Tokens.findAll({
+      where: {
+        [Op.or] : [{isLocalToken: true}, {tokenName: "USDC"}]
+      }
+    });
 
     const ERC20_ABI = [
       "function balanceOf(address owner) view returns (uint256)",
@@ -81,7 +86,7 @@ export const getTokenBalance = async (walletAddress) => {
 
       const formattedBalance = ethers.formatUnits(balance, decimals);
 
-      const pkrValue = Math.random() * 3 + 276; // Simulate PKR value for demonstration
+      const pkrValue = Math.random() * 3 + 276;
 
       totalBalance += Number(formattedBalance);
 
@@ -92,7 +97,7 @@ export const getTokenBalance = async (walletAddress) => {
           pkrValue: pkrValue.toFixed(2),
         });
       }
-      if (token[i].isLocalToken === true && token[i].tokenName === "USDB") {
+      if (token[i].isLocalToken === true && token[i].tokenName === "USDB" || token[i].tokenName === "USDC") {
       balances.push({
         tokenName: token[i].tokenName,
         balance: formattedBalance,

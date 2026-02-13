@@ -79,20 +79,20 @@ export const signupServices = async (req) => {
 
     
 
-    provider = bnbProvider;
-    provider = ethProvider;
-    adminWallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
+    // provider = bnbProvider;
+    // provider = ethProvider;
+    // adminWallet = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY, provider);
 
-    const bnbTx = await adminWallet.sendTransaction({
-      to: wallet.address,
-      value: ethers.parseEther("0.01"),
-    });
+    // const bnbTx = await adminWallet.sendTransaction({
+    //   to: wallet.address,
+    //   value: ethers.parseEther("0.01"),
+    // });
 
-    if (!bnbTx) throw new Error("Transaction Not Initiated");
-    console.log("Transaction Initiated:", bnbTx.hash);
-    const bnbTxWait = await tx.wait();
-    if (!bnbTxWait) throw new Error("Transaction Failed");
-    console.log("Transaction Successful:", bnbTx.hash);
+    // if (!bnbTx) throw new Error("Transaction Not Initiated");
+    // console.log("Transaction Initiated:", bnbTx.hash);
+    // const bnbTxWait = await tx.wait();
+    // if (!bnbTxWait) throw new Error("Transaction Failed");
+    // console.log("Transaction Successful:", bnbTx.hash);
 
     await transaction.commit();
 
