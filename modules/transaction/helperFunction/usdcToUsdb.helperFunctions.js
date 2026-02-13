@@ -46,8 +46,13 @@ export const USDC_TO_USDB = async (user, amount, to) => {
 
     console.log("Wallet Address:", wallet);
 
+    // const USDC_CONTRACT = await Tokens.findOne({
+    //   where: { tokenName: 'USDC' },
+    //   attributes: ["tokenAddress"],
+    // });
+
     const token = new ethers.Contract(
-      process.env.USDC_Contract, //Binance chain contract address for USDC
+      process.env.USDC_CONTRACT, //Binance chain contract address for USDC
       ERC20_ABI,
       wallet,
     );
