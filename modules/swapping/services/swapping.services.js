@@ -289,23 +289,14 @@ export const tokenEquivalentAmount = async (req) => {
       throw new Error("amount, from, and to tokens are required");
     }
 
-    // const inputAmount = Number(amount);
-
-    // Fetch tokens
     const fromToken = await Tokens.findOne({ where: { id: from } });
-    const toToken = await Tokens.findOne({ where: { id: to } });
-
-    const inputAmount = ethers.parseUnits(
-      amount.toString(),
-      fromToken.isNative ? 18 : fromToken.decimals,
-    );
-
-    console.log("From Token:", inputAmount);
+    const toToken   = await Tokens.findOne({ where: { id: to } });
 
     if (!fromToken || !toToken) {
       throw new Error("Unsupported token");
     }
 
+    // 1️⃣ LOCAL ↔ LOCAL OR LOCAL ↔ USDC = 1:1
     if (
       (fromToken.isLocalToken && toToken.isLocalToken) ||
       (fromToken.tokenName === "USDC" && toToken.isLocalToken) ||
@@ -319,74 +310,58 @@ export const tokenEquivalentAmount = async (req) => {
       };
     }
 
-    // Fetch WETH
+    // Fetch WETH & USDC from DB
     const weth = await Tokens.findOne({ where: { tokenName: "WETH" } });
     const usdc = await Tokens.findOne({ where: { tokenName: "USDC" } });
 
-    if (!weth) {
-      throw new Error("WETH not found in registry");
+    if (!weth || !usdc) {
+      throw new Error("WETH / USDC not found in registry");
     }
 
-    // Uniswap V2 Router
-    const routerAddress = process.env.UNI_SWAP_ROUTER_ADDRESS;
+    // Uniswap Router
     const ROUTER_ABI = [
-      "function getAmountsOut(uint amountIn, address[] calldata path) view returns (uint[] memory amounts)",
+      "function getAmountsOut(uint amountIn, address[] calldata path) view returns (uint[] memory amounts)"
     ];
 
-    const router = new ethers.Contract(routerAddress, ROUTER_ABI, ethProvider);
-
-    // Resolve actual addresses (ETH → WETH)
-    let fromAddress = fromToken.isNative
-      ? weth.tokenAddress
-      : fromToken.tokenAddress;
-    let toAddress = toToken.isNative ? weth.tokenAddress : toToken.tokenAddress;
-
-    console.log("Initial From Address:", fromAddress);
-    console.log("Initial To Address:", toAddress);
-
-    console.log(
-      "From Token Local Status:",
-      fromToken.isLocalToken,
-      "To Token Local Status:",
-      toToken.isLocalToken,
+    const router = new ethers.Contract(
+      process.env.UNI_SWAP_ROUTER_ADDRESS,
+      ROUTER_ABI,
+      ethProvider
     );
 
-    if (fromToken.isLocalToken === true && toToken.isLocalToken === false) {
-      fromAddress = usdc.tokenAddress;
-    }
-    if (fromToken.isLocalToken === false && toToken.isLocalToken === false) {
-      toAddress = usdc.tokenAddress;
-    }
+    // 2️⃣ RESOLVE EFFECTIVE TOKEN (THIS IS THE MAGIC)
+    const fromEffective = resolveEffectiveToken(fromToken, usdc, weth);
+    const toEffective   = resolveEffectiveToken(toToken, usdc, weth);
 
-    console.log("Initial From Address:", fromAddress);
-    console.log("Initial To Address:", toAddress);
+    // 3️⃣ PARSE INPUT USING EFFECTIVE DECIMALS
+    const amountIn = ethers.parseUnits(
+      amount.toString(),
+      fromEffective.decimals
+    );
 
-    // Build path
-    const path = _buildPath(fromAddress, toAddress, weth.tokenAddress);
+    // 4️⃣ BUILD PATH
+    const path = _buildPath(
+      fromEffective.address,
+      toEffective.address,
+      weth.tokenAddress
+    );
 
-    console.log("Calculated Path:", path);
-
-    // Parse input amount
-    const amountIn = inputAmount;
-
-    console.log("---- RATE CALCULATION ----");
+    console.log("------ RATE CALCULATION ------");
     console.log("From:", fromToken.tokenName);
     console.log("To:", toToken.tokenName);
-    console.log("Input:", inputAmount);
-    console.log("Parsed Input Amount (raw):", amountIn.toString());
+    console.log("Router sees From:", fromEffective.address);
+    console.log("Router sees To:", toEffective.address);
     console.log("Path:", path);
+    console.log("Amount In:", amountIn.toString());
 
-    // Get amounts out
+    // 5️⃣ GET OUTPUT
     const amountsOut = await router.getAmountsOut(amountIn, path);
 
-    // Final output
     const rawOutput = amountsOut[amountsOut.length - 1];
-
-    console.log("Raw Output Amount:", rawOutput.toString());
 
     const outputAmount = ethers.formatUnits(
       rawOutput,
-      toToken.isNative ? 18 : toToken.decimals,
+      toEffective.decimals
     );
 
     return {
@@ -395,15 +370,39 @@ export const tokenEquivalentAmount = async (req) => {
       inputAmount: amount,
       outputAmount,
     };
+
   } catch (err) {
     console.error("tokenEquivalentAmount error:", err.message);
     throw err;
   }
 };
 
-/**
- * Build optimal Uniswap V2 path
- */
+
+function resolveEffectiveToken(token, usdc, weth) {
+
+  // Native ETH → WETH
+  if (token.isNative) {
+    return {
+      address: weth.tokenAddress,
+      decimals: 18
+    };
+  }
+
+  // LOCAL TOKEN → USDC
+  if (token.isLocalToken) {
+    return {
+      address: usdc.tokenAddress,
+      decimals: 6
+    };
+  }
+
+  // NORMAL ERC20
+  return {
+    address: token.tokenAddress,
+    decimals: token.decimals
+  };
+}
+
 function _buildPath(from, to, weth) {
   // Direct WETH pair
   if (from === weth || to === weth) {
