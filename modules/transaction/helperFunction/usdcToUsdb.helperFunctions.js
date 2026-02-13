@@ -9,6 +9,8 @@ import { User } from "../../auth/models/user.model.js";
 import fs from "fs";
 import { randomHookData } from "../../../utils/utils.js";
 import { Tokens } from "../model/token.model.js";
+import path from "path";
+
 export const USDC_TO_USDB = async (user, amount, to) => {
   try {
     console.log("Inside helper");
@@ -74,7 +76,8 @@ export const USDC_TO_USDB = async (user, amount, to) => {
     console.log("Approval Transaction Hash:", tx);
     const receipt = await tx.wait();
     console.log("Approval Transaction Receipt:", receipt);
-    const fullABI = JSON.parse(fs.readFileSync("./XReserve.json", "utf8"));
+    const filePath = path.join(__dirname, "XReserve.json");
+    const fullABI = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
     // Filter only the depositToRemote function
     const depositToRemoteABI = fullABI.filter(
