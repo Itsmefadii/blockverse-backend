@@ -166,7 +166,7 @@ export const getAllAttestationsService = async (req) => {
     const [attestation] = await sequelize.query(`
       SELECT a.id as transactionId, u.name AS userName, u.email, a.transactionFlow, a.transactionData, a.attestedBy, a.createdAt 
       FROM Attestations a LEFT JOIN user u ON u.id = a.userId
-      ${whereClause};`);
+      ${whereClause} order by a.createdAt DESC;`);
 
     return attestation;
   } catch (error) {

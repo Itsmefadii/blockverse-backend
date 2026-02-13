@@ -45,6 +45,7 @@ export const tokenRegistryListingService = async (req) => {
           id: {
             [Op.ne]: req.query.tokenId,
           },
+          isVisible: true,
         },
         attributes: ["id", "tokenName"],
       });

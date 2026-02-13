@@ -126,10 +126,9 @@ export const SwappingService = async (req) => {
 
     console.log("Swap Transaction:", tx);
 
-    const receipt = await tx.wait();
 
-    console.log("Transaction Receipt:", receipt);
-    return receipt.hash;
+    console.log("Transaction Receipt:", tx);
+    return tx.hash;
   } catch (error) {
     throw new Error(`Swapping failed: ${error.message}`);
   }
@@ -224,8 +223,10 @@ async function swap({
       deadline,
       { value: amountIn },
     );
+
+    const receipt = await tx.wait();
     return {
-      hash: tx.hash,
+      hash: receipt.hash,
       amountOut: ethers.formatUnits(amountOut, toToken.decimals),
     };
   }
@@ -253,8 +254,10 @@ async function swap({
       wallet.address,
       deadline,
     );
+
+    const receipt = await tx.wait();
     return {
-      hash: tx.hash,
+      hash: receipt.hash,
       amountOut: ethers.formatUnits(amountOut, 18),
     };
   }
@@ -270,8 +273,10 @@ async function swap({
     wallet.address,
     deadline,
   );
+
+  const receipt = await tx.wait();
   return {
-    hash: tx.hash,
+    hash: receipt.hash,
     amountOut: ethers.formatUnits(amountOut, toToken.decimals),
   };
 }
@@ -309,8 +314,8 @@ export const tokenEquivalentAmount = async (req) => {
       return {
         from: fromToken.tokenName,
         to: toToken.tokenName,
-        inputAmount: inputAmount.toString(),
-        outputAmount: inputAmount.toString(),
+        inputAmount: amount.toString(),
+        outputAmount: amount.toString(),
       };
     }
 
@@ -349,6 +354,9 @@ export const tokenEquivalentAmount = async (req) => {
     if (fromToken.isLocalToken === true && toToken.isLocalToken === false) {
       fromAddress = usdc.tokenAddress;
     }
+    if (fromToken.isLocalToken === false && toToken.isLocalToken === false) {
+      toAddress = usdc.tokenAddress;
+    }
 
     console.log("Initial From Address:", fromAddress);
     console.log("Initial To Address:", toAddress);
@@ -359,15 +367,13 @@ export const tokenEquivalentAmount = async (req) => {
     console.log("Calculated Path:", path);
 
     // Parse input amount
-    const amountIn = ethers.parseUnits(
-      inputAmount.toString(),
-      fromToken.isNative ? 18 : fromToken.decimals,
-    );
+    const amountIn = inputAmount;
 
     console.log("---- RATE CALCULATION ----");
     console.log("From:", fromToken.tokenName);
     console.log("To:", toToken.tokenName);
     console.log("Input:", inputAmount);
+    console.log("Parsed Input Amount (raw):", amountIn.toString());
     console.log("Path:", path);
 
     // Get amounts out
@@ -386,7 +392,7 @@ export const tokenEquivalentAmount = async (req) => {
     return {
       from: fromToken.tokenName,
       to: toToken.tokenName,
-      inputAmount: inputAmount.toString(),
+      inputAmount: amount,
       outputAmount,
     };
   } catch (err) {

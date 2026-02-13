@@ -1,5 +1,9 @@
 import { ethers } from "ethers";
-import { addressToBytes32, ethProvider, signature } from "../../../utils/utils.js";
+import {
+  addressToBytes32,
+  ethProvider,
+  signature,
+} from "../../../utils/utils.js";
 import { randomHookData } from "../../../utils/utils.js";
 import { Tokens } from "../model/token.model.js";
 import fs from "fs";
@@ -12,7 +16,7 @@ export const USDB_TO_LOCAL = async (user, amount, tokenId) => {
         where: { id: user.id },
         attributes: ["privateKey"],
       });
-      
+
       const wallet = new ethers.Wallet(userPrivKey.privateKey, ethProvider);
 
       const ERC20_ABI = [
@@ -55,7 +59,7 @@ export const USDB_TO_LOCAL = async (user, amount, tokenId) => {
 
       console.log("HBLX Token Contract: ", token);
 
-      console.log("Remote Domain: ", formattedRemoteDomain)
+      console.log("Remote Domain: ", formattedRemoteDomain);
 
       const USDBSpenderAddress = process.env.XReserve_Contract_USDB; //For Sepolia Chain (XReserve for USDB )
 
@@ -81,9 +85,9 @@ export const USDB_TO_LOCAL = async (user, amount, tokenId) => {
       // });
 
       const depositToRemoteStringABI = [
-      "function depositToRemote(uint256 value, uint32 remoteDomain, bytes32 remoteRecipien, address localToken, uint256 maxFee, bytes hookData) external",
-    ];
-    
+        "function depositToRemote(uint256 value, uint32 remoteDomain, bytes32 remoteRecipien, address localToken, uint256 maxFee, bytes hookData) external",
+      ];
+
       console.log(depositToRemoteStringABI);
 
       const xreserve = new ethers.Contract(
@@ -113,18 +117,17 @@ export const USDB_TO_LOCAL = async (user, amount, tokenId) => {
       const _wait = await xresTxIntent.wait();
       console.log("_wait", _wait);
 
-      console.log("INTENT: ", xresTxIntent.data)
+      console.log("INTENT: ", xresTxIntent.data);
       const signature1 = await signature(
         process.env.ADMIN_PRIVATE_KEY,
         xresTxIntent.data,
       );
 
-      console.log("Signature: ", signature1)
+      console.log("Signature: ", signature1);
 
-     const LocalToken_ABI = [
-      "function mintByIntent(bytes intentCalldata, bytes signature) external",
-    ];
-
+      const LocalToken_ABI = [
+        "function mintByIntent(bytes intentCalldata, bytes signature) external",
+      ];
 
       const LocalToken = new ethers.Contract(
         contractAddress.tokenAddress,
@@ -132,9 +135,12 @@ export const USDB_TO_LOCAL = async (user, amount, tokenId) => {
         wallet,
       );
 
-      console.log("Local Token Contract: ", LocalToken)
+      console.log("Local Token Contract: ", LocalToken);
 
-      const localTokenMint = await LocalToken.mintByIntent(xresTxIntent.data, signature1);
+      const localTokenMint = await LocalToken.mintByIntent(
+        xresTxIntent.data,
+        signature1,
+      );
       console.log("localTokenMint", localTokenMint);
 
       const localTokenMintWait = await localTokenMint.wait();
@@ -146,8 +152,8 @@ export const USDB_TO_LOCAL = async (user, amount, tokenId) => {
         txHash: localTokenMintWait.hash,
         intent: localTokenMint.data,
         signature: signature1,
-        amount: amount
-      }
+        amount: amount,
+      };
     }
   } catch (error) {
     throw new Error(error.message);

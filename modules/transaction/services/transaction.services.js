@@ -18,20 +18,27 @@ import { Attestations } from "../model/attestation.model.js";
 export const transferTokenService = async (req) => {
   try {
     console.log("Inside transferTokenService");
+    console.log("Request Body:", req.body);
+    console.log("Request Body:", req.query.token);
 
-    const { tokenId, toAddress, amount } = req.body;
+    const { amount } = req.body;
+
+    // const { tokenId, toAddress, amount } = req.body;
 
     if (amount == 0) {
       throw new Error("Enter Valid Amount");
     }
 
-    if (req.query.tokenId === "eth") {
+    if (req.query.token === "eth") {
+      console.log("Transferring ETH to other wallet");
       const ethToOtherWallet1 = await ethToOtherWallet(req);
       if (!ethToOtherWallet1) {
         throw new Error("Transfer From ETH to Other Wallet Failed");
       }
       return { data: ethToOtherWallet1 };
     }
+
+     const { tokenId, toAddress } = req.body;
 
     const privateKey = await User.findOne({
       where: { id: req.user.id },
@@ -455,15 +462,20 @@ const _signature = async (privateKey, data) => {
 
 const ethToOtherWallet = async (req) => {
   console.log("req.user", req.user);
+
   const privateKey = await User.findOne({
     where: { id: req.user.id },
     attributes: ["privateKey"],
   });
 
+  console.log("Private Key:", privateKey.privateKey);
+
   let provider = ethProvider;
   let adminWallet = new ethers.Wallet(privateKey.privateKey, provider);
 
   const { amount, toAddress } = req.body;
+
+  console.log("Transferring", amount, "ETH to", toAddress);
 
   const tx = await adminWallet.sendTransaction({
     to: toAddress,

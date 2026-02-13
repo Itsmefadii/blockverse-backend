@@ -4,7 +4,7 @@ import { Op } from "sequelize";
 
 export const getUserListService = async (req) => {
   try {
-    if(req.user.role === "user"){
+    if (req.user.role === "user") {
       throw new Error("Only admin can access this resource");
     }
     const { id, searchTxt, searchBy } = req.query;
@@ -24,6 +24,9 @@ export const getUserListService = async (req) => {
         where: {
           [Op.and]: [search, { roleId: { [Op.ne]: 1 } }],
         },
+        order: [
+          ["createdAt", "DESC"], // change column name as needed
+        ],
       });
 
       return userList;
@@ -48,6 +51,9 @@ export const getUserListService = async (req) => {
       where: {
         roleId: { [Op.ne]: 1 },
       },
+      order: [
+        ["createdAt", "DESC"], // change column name as needed
+      ],
     });
     return userList;
   } catch (error) {
